@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Equity & SO Tracker</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+      background: #090d16;
+      color: #f1f5f9;
+      margin: 0;
+      padding: env(safe-area-inset-top, 24px) 16px env(safe-area-inset-bottom, 24px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .app-container { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 14px; }
+    .card {
+      background: #151e2e;
+      border-radius: 20px;
+      padding: 20px;
+      border: 1px solid #1e293b;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 1rem; color: #94a3b8; margin: 0; }
+    .gear-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #94a3b8; }
+
+    /* ロックアップバナー */
+    .lockup-banner {
+      background: #312e81; border: 1px solid #4338ca; color: #c7d2fe;
+      font-size: 0.75rem; border-radius: 8px; padding: 6px 10px; margin-top: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .lockup-banner.unlocked { background: #064e3b; border-color: #059669; color: #a7f3d0; }
+
+    /* メインヒーロー：純含み益 */
+    .hero-box { text-align: center; margin: 16px 0 20px; }
+    .hero-label { font-size: 0.75rem; color: #38bdf8; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+    .hero-value { font-size: 2.3rem; font-weight: 800; color: #ffffff; margin-top: 4px; }
+    .hero-sub { font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
+
+    /* 必要資金コールアウト（重要カード） */
+    .funding-card {
+      background: linear-gradient(135deg, rgba(234, 88, 12, 0.15), rgba(245, 158, 11, 0.1));
+      border: 1px solid #f97316;
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .funding-title { font-size: 0.75rem; font-weight: 700; color: #fb923c; margin-bottom: 8px; text-transform: uppercase; }
+    .funding-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 0.88rem; }
+    .funding-row:last-child { margin-bottom: 0; }
+    .funding-val { font-weight: 700; color: #ffedd5; font-size: 1.05rem; }
+
+    .data-grid { display: flex; flex-direction: column; gap: 10px; background: #0b111e; border-radius: 14px; padding: 14px; }
+    .data-row { display: flex; justify-content: space-between; font-size: 0.88rem; }
+    .data-row.sub { padding-left: 10px; font-size: 0.78rem; color: #64748b; }
+    .label { color: #94a3b8; }
+    .val { font-weight: 600; color: #f8fafc; }
+    .val.highlight { color: #38bdf8; }
+
+    .btn-main {
+      width: 100%; padding: 16px; border-radius: 16px;
+      background: linear-gradient(135deg, #2563eb, #06b6d4);
+      color: white; font-size: 1.05rem; font-weight: 700; border: none;
+      box-shadow: 0 4px 20px rgba(37,99,235,0.4); cursor: pointer;
+    }
+    .btn-main:active { transform: scale(0.98); }
+
+    /* 設定モーダル */
+    .modal {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(5px); align-items: center; justify-content: center; padding: 16px; z-index: 100;
+    }
+    .modal-content {
+      background: #1e293b; border-radius: 20px; padding: 20px; width: 100%; max-width: 380px;
+      max-height: 85vh; overflow-y: auto; color: #f8fafc;
+    }
+    .modal h2 { font-size: 1.05rem; margin-top: 0; margin-bottom: 12px; }
+    .sec-label { font-size: 0.8rem; font-weight: bold; color: #38bdf8; margin: 14px 0 6px; }
+    .input-group { margin-bottom: 10px; }
+    .input-group label { display: block; font-size: 0.72rem; color: #94a3b8; margin-bottom: 3px; }
+    .input-group input {
+      width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: white; font-size: 0.9rem;
+    }
+    .btn-save { width: 100%; padding: 12px; border-radius: 10px; background: #22c55e; border: none; color: white; font-weight: bold; margin-top: 14px; cursor: pointer; }
+    .badge-split { background: #3b82f6; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="card">
+    <div class="header">
+      <h1 id="displayTicker">自社株・SO 資産現況</h1>
+      <button class="gear-btn" onclick="openModal()">⚙️</button>
+    </div>
+
+    <!-- ロックアップ状態表示 -->
+    <div class="lockup-banner" id="lockupBanner">
+      <span>🔒 ロックアップ期間中</span>
+      <span id="lockupDays">計算中...</span>
+    </div>
+
+    <!-- メイン：現在確定している純儲け額 -->
+    <div class="hero-box">
+      <div class="hero-label">現在の純利益・純儲け（税引前）</div>
+      <div class="hero-value" id="netRealizedProfit">¥ --</div>
+      <div class="hero-sub">生株含み益 ＋ SO確定分の純手残り</div>
+    </div>
+
+    <!-- 必要現金表示カード -->
+    <div class="funding-card">
+      <div class="funding-title">💵 権利行使に必要な現金準備額</div>
+      <div class="funding-row">
+        <span>今すぐ行使する場合 (確定分)</span>
+        <span class="funding-val" id="vestedExerciseCost">-- 円</span>
+      </div>
+      <div class="funding-row" style="font-size: 0.78rem; color: #fdba74;">
+        <span>将来全行使する場合の総額</span>
+        <span id="totalExerciseCost">-- 円</span>
+      </div>
+    </div>
+
+    <div class="data-grid">
+      <div class="data-row">
+        <span class="label">株価 (現在値)</span>
+        <span class="val highlight" id="currentPrice">-- 円</span>
+      </div>
+
+      <!-- 生株 -->
+      <div class="data-row">
+        <span class="label">生株 保有総数 <span id="splitBadge" class="badge-split" style="display:none;"></span></span>
+        <span class="val" id="totalStockShares">-- 株</span>
+      </div>
+      <div class="data-row">
+        <span class="label">生株 含み損益 (時価 − 取得原価)</span>
+        <span class="val" id="stockProfit">-- 円</span>
+      </div>
+
+      <!-- SO 1 (IPO起点) -->
+      <div class="data-row" style="margin-top: 6px; border-top: 1px dashed #1e293b; padding-top: 6px;">
+        <span class="label">SO① 行使可能 純利益</span>
+        <span class="val" id="so1VestedProfit">-- 円</span>
+      </div>
+      <div class="data-row sub">
+        <span>確定株数 / 行使必要資金</span>
+        <span id="so1VestedDetail">-- 株 / -- 円</span>
+      </div>
+
+      <!-- SO 2 (2030年期日型) -->
+      <div class="data-row" style="margin-top: 6px; border-top: 1px dashed #1e293b; padding-top: 6px;">
+        <span class="label">SO② (2030年解禁型)</span>
+        <span class="val" id="so2Status">未確定</span>
+      </div>
+      <div class="data-row sub">
+        <span>解禁時 純儲け / 必要行使資金</span>
+        <span id="so2Detail">-- 円 / -- 円</span>
+      </div>
+
+      <!-- 未確定分含む総潜在利益 -->
+      <div class="data-row" style="margin-top: 6px; border-top: 1px solid #334155; padding-top: 6px;">
+        <span class="label">未確定分含む 最終純利益</span>
+        <span class="val" style="color: #a5b4fc;" id="grandTotalNetProfit">¥ --</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-main" id="fetchBtn" onclick="refreshAsset()">最新株価を取得</button>
+  <div style="text-align: center; font-size: 0.75rem; color: #475569;" id="updateTime">ボタンをタップして更新</div>
+</div>
+
+<!-- 設定モーダル -->
+<div class="modal" id="settingsModal">
+  <div class="modal-content">
+    <h2>パラメータ設定</h2>
+    
+    <div class="sec-label">基本・株式分割</div>
+    <div class="input-group">
+      <label>証券コード (東証: 例 7203.T)</label>
+      <input type="text" id="cfg_ticker" />
+    </div>
+    <div class="input-group">
+      <label>株式分割比率（通常 1、2分割なら 2）</label>
+      <input type="number" step="0.1" id="cfg_splitRatio" />
+    </div>
+    <div class="input-group">
+      <label>ロックアップ解除日 (YYYY-MM-DD)</label>
+      <input type="date" id="cfg_lockupDate" />
+    </div>
+
+    <div class="sec-label">生株（普通株式）</div>
+    <div class="input-group">
+      <label>初期保有株数 (株)</label>
+      <input type="number" id="cfg_stockShares" />
+    </div>
+    <div class="input-group">
+      <label>取得単価 (円)</label>
+      <input type="number" id="cfg_stockCost" />
+    </div>
+
+    <div class="sec-label">SO パターン①（上場連動型）</div>
+    <div class="input-group">
+      <label>IPO上場日 (YYYY-MM-DD)</label>
+      <input type="date" id="cfg_ipoDate" />
+    </div>
+    <div class="input-group">
+      <label>SO① 付与株数 (株)</label>
+      <input type="number" id="cfg_so1Shares" />
+    </div>
+    <div class="input-group">
+      <label>SO① 権利行使価格 (円)</label>
+      <input type="number" id="cfg_so1Strike" />
+    </div>
+    <div class="input-group">
+      <label>SO① 行使済株数 (生株化済)</label>
+      <input type="number" id="cfg_so1Exercised" />
+    </div>
+
+    <div class="sec-label">SO パターン②（2030年解禁型）</div>
+    <div class="input-group">
+      <label>行使可能開始日 (YYYY-MM-DD)</label>
+      <input type="date" id="cfg_so2UnlockDate" />
+    </div>
+    <div class="input-group">
+      <label>SO② 付与株数 (株)</label>
+      <input type="number" id="cfg_so2Shares" />
+    </div>
+    <div class="input-group">
+      <label>SO② 権利行使価格 (円)</label>
+      <input type="number" id="cfg_so2Strike" />
+    </div>
+    <div class="input-group">
+      <label>SO② 行使済株数 (生株化済)</label>
+      <input type="number" id="cfg_so2Exercised" />
+    </div>
+
+    <button class="btn-save" onclick="saveSettings()">保存して再計算</button>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = "equity_config_cash_v4";
+
+  const defaultConfig = {
+    ticker: "7203.T",
+    splitRatio: 1,
+    lockupDate: "2027-04-15",
+    stockShares: 1000,
+    stockCost: 500,
+
+    ipoDate: "2026-10-01",
+    so1Shares: 2000,
+    so1Strike: 500,
+    so1Exercised: 0,
+
+    so2UnlockDate: "2030-06-15",
+    so2Shares: 2000,
+    so2Strike: 800,
+    so2Exercised: 0
+  };
+
+  function loadConfig() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? { ...defaultConfig, ...JSON.parse(raw) } : defaultConfig;
+  }
+
+  function openModal() {
+    const cfg = loadConfig();
+    const map = [
+      'ticker', 'splitRatio', 'lockupDate', 'stockShares', 'stockCost',
+      'ipoDate', 'so1Shares', 'so1Strike', 'so1Exercised',
+      'so2UnlockDate', 'so2Shares', 'so2Strike', 'so2Exercised'
+    ];
+    map.forEach(key => {
+      const el = document.getElementById('cfg_' + key);
+      if (el) el.value = cfg[key];
+    });
+    document.getElementById("settingsModal").style.display = "flex";
+  }
+
+  function saveSettings() {
+    const cfg = {
+      ticker: document.getElementById("cfg_ticker").value.trim(),
+      splitRatio: parseFloat(document.getElementById("cfg_splitRatio").value) || 1,
+      lockupDate: document.getElementById("cfg_lockupDate").value,
+      stockShares: parseFloat(document.getElementById("cfg_stockShares").value) || 0,
+      stockCost: parseFloat(document.getElementById("cfg_stockCost").value) || 0,
+      
+      ipoDate: document.getElementById("cfg_ipoDate").value,
+      so1Shares: parseFloat(document.getElementById("cfg_so1Shares").value) || 0,
+      so1Strike: parseFloat(document.getElementById("cfg_so1Strike").value) || 0,
+      so1Exercised: parseFloat(document.getElementById("cfg_so1Exercised").value) || 0,
+
+      so2UnlockDate: document.getElementById("cfg_so2UnlockDate").value,
+      so2Shares: parseFloat(document.getElementById("cfg_so2Shares").value) || 0,
+      so2Strike: parseFloat(document.getElementById("cfg_so2Strike").value) || 0,
+      so2Exercised: parseFloat(document.getElementById("cfg_so2Exercised").value) || 0,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    document.getElementById("settingsModal").style.display = "none";
+    refreshAsset();
+  }
+
+  function getVestingRatio1(ipoDateStr) {
+    if (!ipoDateStr) return 0;
+    const ipo = new Date(ipoDateStr);
+    const now = new Date();
+    if (now < ipo) return 0;
+
+    const oneYear = new Date(ipo); oneYear.setFullYear(ipo.getFullYear() + 1);
+    const twoYears = new Date(ipo); twoYears.setFullYear(ipo.getFullYear() + 2);
+
+    if (now >= twoYears) return 1.0;
+    if (now >= oneYear) return 0.50;
+    return 0.25;
+  }
+
+  function isVested2(unlockDateStr) {
+    if (!unlockDateStr) return false;
+    return new Date() >= new Date(unlockDateStr);
+  }
+
+  async function refreshAsset() {
+    const cfg = loadConfig();
+    const btn = document.getElementById("fetchBtn");
+    btn.innerText = "取得中...";
+    btn.disabled = true;
+
+    document.getElementById("displayTicker").innerText = `${cfg.ticker} 資産現況`;
+
+    const S = cfg.splitRatio;
+    const splitBadge = document.getElementById("splitBadge");
+    if (S > 1) {
+      splitBadge.innerText = `分割 ${S}倍`;
+      splitBadge.style.display = "inline";
+    } else {
+      splitBadge.style.display = "none";
+    }
+
+    // ロックアップ判定
+    if (cfg.lockupDate) {
+      const lockupDate = new Date(cfg.lockupDate);
+      const diffDays = Math.ceil((lockupDate - new Date()) / (1000 * 60 * 60 * 24));
+      const lockupEl = document.getElementById("lockupBanner");
+      if (diffDays > 0) {
+        lockupEl.className = "lockup-banner";
+        lockupEl.innerHTML = `<span>🔒 ロックアップ期間中</span><span>解除まで あと ${diffDays} 日</span>`;
+      } else {
+        lockupEl.className = "lockup-banner unlocked";
+        lockupEl.innerHTML = `<span>🔓 ロックアップ解除済</span><span>売却可能</span>`;
+      }
+    }
+
+    let price = 0;
+    try {
+      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${cfg.ticker}`);
+      const data = await res.json();
+      price = data.chart.result[0].meta.regularMarketPrice;
+    } catch (e) {
+      const manual = prompt("株価の自動取得に失敗しました。現在の株価を手動入力してください（円）:", "2000");
+      price = parseFloat(manual) || 0;
+    }
+
+    btn.innerText = "最新株価を取得";
+    btn.disabled = false;
+    if (!price) return;
+
+    // --- 計算 ---
+    // 1. 生株
+    const adjInitialStock = cfg.stockShares * S;
+    const adjInitialCost = cfg.stockCost / S;
+    const adjEx1 = cfg.so1Exercised * S;
+    const adjCost1 = cfg.so1Strike / S;
+    const adjEx2 = cfg.so2Exercised * S;
+    const adjCost2 = cfg.so2Strike / S;
+
+    const totalStockShares = adjInitialStock + adjEx1 + adjEx2;
+    const totalCostBasis = (adjInitialStock * adjInitialCost) + (adjEx1 * adjCost1) + (adjEx2 * adjCost2);
+    const stockProfit = (totalStockShares * price) - totalCostBasis;
+
+    // 2. SO①
+    const ratio1 = getVestingRatio1(cfg.ipoDate);
+    const remainingSo1Total = Math.max(0, (cfg.so1Shares - cfg.so1Exercised) * S);
+    const strike1 = cfg.so1Strike / S;
+    const vestedSo1Shares = remainingSo1Total * ratio1;
+    const unvestedSo1Shares = remainingSo1Total - vestedSo1Shares;
+
+    // SO①の必要行使資金
+    const vestedCost1 = vestedSo1Shares * strike1;
+    const totalCost1 = remainingSo1Total * strike1;
+    // SO①の純利益 (時価 - 行使必要額)
+    const so1VestedNetProfit = Math.max(0, price - strike1) * vestedSo1Shares;
+    const so1UnvestedNetProfit = Math.max(0, price - strike1) * unvestedSo1Shares;
+
+    // 3. SO②
+    const remainingSo2Total = Math.max(0, (cfg.so2Shares - cfg.so2Exercised) * S);
+    const strike2 = cfg.so2Strike / S;
+    const isUnlocked2 = isVested2(cfg.so2UnlockDate);
+    const totalCost2 = remainingSo2Total * strike2;
+    const so2FullNetProfit = Math.max(0, price - strike2) * remainingSo2Total;
+
+    const vestedCost2 = isUnlocked2 ? totalCost2 : 0;
+    const so2VestedNetProfit = isUnlocked2 ? so2FullNetProfit : 0;
+    const so2UnvestedNetProfit = isUnlocked2 ? 0 : so2FullNetProfit;
+
+    // 合計
+    const currentVestedExerciseCost = vestedCost1 + vestedCost2;
+    const grandTotalExerciseCost = totalCost1 + totalCost2;
+
+    const totalNetRealizedProfit = stockProfit + so1VestedNetProfit + so2VestedNetProfit;
+    const grandTotalNetProfit = totalNetRealizedProfit + so1UnvestedNetProfit + so2UnvestedNetProfit;
+
+    // --- 表示反映 ---
+    const fmt = n => Math.round(n).toLocaleString() + " 円";
+    document.getElementById("currentPrice").innerText = fmt(price);
+    document.getElementById("totalStockShares").innerText = `${Math.round(totalStockShares).toLocaleString()} 株`;
+    document.getElementById("stockProfit").innerText = fmt(stockProfit);
+
+    // 必要現金
+    document.getElementById("vestedExerciseCost").innerText = fmt(currentVestedExerciseCost);
+    document.getElementById("totalExerciseCost").innerText = fmt(grandTotalExerciseCost);
+
+    // SO①
+    document.getElementById("so1VestedProfit").innerText = fmt(so1VestedNetProfit);
+    document.getElementById("so1VestedDetail").innerText = `${Math.round(vestedSo1Shares).toLocaleString()} 株 / 行使資金: ${fmt(vestedCost1)}`;
+
+    // SO②
+    if (isUnlocked2) {
+      document.getElementById("so2Status").innerText = "行使可能 (" + fmt(so2VestedNetProfit) + ")";
+      document.getElementById("so2Detail").innerText = "確定済 / 行使資金: " + fmt(totalCost2);
+    } else {
+      document.getElementById("so2Status").innerText = "未解禁 (2030年6月予定)";
+      document.getElementById("so2Detail").innerText = `${fmt(so2UnvestedNetProfit)} / 行使資金: ${fmt(totalCost2)}`;
+    }
+
+    // 純利益ヒーロー
+    document.getElementById("netRealizedProfit").innerText = "¥ " + Math.round(totalNetRealizedProfit).toLocaleString();
+    document.getElementById("grandTotalNetProfit").innerText = "¥ " + Math.round(grandTotalNetProfit).toLocaleString();
+    document.getElementById("updateTime").innerText = "最終更新: " + new Date().toLocaleTimeString();
+  }
+
+  window.onload = refreshAsset;
+</script>
+</body>
+</html>
